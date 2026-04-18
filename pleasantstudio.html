@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>PLEASANTSTUDIO©</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    touch-action: none;
+  }
+  .letter {
+    position: absolute;
+    font-family: 'Arial Black', Arial, sans-serif;
+    font-weight: 900;
+    font-size: 52px;
+    user-select: none;
+    pointer-events: none;
+    will-change: transform;
+  }
+  #hint {
+    position: fixed;
+    bottom: 24px;
+    left: 0; right: 0;
+    text-align: center;
+    font-family: sans-serif;
+    font-size: 13px;
+    color: rgba(255,255,255,0.25);
+    pointer-events: none;
+    transition: opacity 1s;
+  }
+  #permission-btn {
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    font-size: 16px;
+    padding: 14px 28px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<div id="hint">Tilt to move · Tap to shake</div>
+<button id="permission-btn">Tap to enable gyro</button>
+
+<script>
+const WORD = 'PLEASANTSTUDIO©';
+let W = window.innerWidth;
+let H = window.innerHeight;
+const FRICTION = 0.984;
+const BOUNCE   = 0.55;
+const G_SCALE  = 0.55;
+const LETTER_W = 34;
+const LETTER_H = 52;
+
+let gx = 0, gy = 5;
+let gyroActive = false;
+
+const bodies = WORD.split('').map((ch, i) => {
+  const el = document.createElement('div');
+  el.className = 'letter';
+  el.textContent = ch;
+  el.style.color = `hsl(${Math.round((i / WORD.length) * 360)}, 88%, 72%)`;
+  document.body.appendChild(el);
+  return {
+    el,
+    x:    40 + Math.random() * (W - 120),
+    y:    40 + Math.random() * (H * 0.45),
+    vx:   (Math.random() - 0.5) * 6,
+    vy:   (Math.random() - 0.5) * 6,
+    rot:  Math.random() * 360,
+    vrot: (Math.random() - 0.5) * 12
+  };
+});
+
+function shake() {
+  bodies.forEach(b => {
+    b.vx  += (Math.random() - 0.5) * 28;
+    b.vy  += (Math.random() - 0.5) * 28;
+    b.vrot += (Math.random() - 0.5) * 40;
+  });
+}
+
+function loop() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+
+  bodies.forEach(b => {
+    b.vx = (b.vx + gx * G_SCALE) * FRICTION;
+    b.vy = (b.vy + gy * G_SCALE) * FRICTION;
+    b.vrot *= 0.97;
+
+    b.x += b.vx;
+    b.y += b.vy;
+    b.rot += b.vrot;
+
+    if (b.x < 0) {
+      b.x = 0;
+      b.vx = Math.abs(b.vx) * BOUNCE;
+      b.vrot += 4;
+    }
+    if (b.x + LETTER_W > W) {
+      b.x = W - LETTER_W;
+      b.vx = -Math.abs(b.vx) * BOUNCE;
+      b.vrot -= 4;
+    }
+    if (b.y < 0) {
+      b.y = 0;
+      b.vy = Math.abs(b.vy) * BOUNCE;
+      b.vrot += 2;
+    }
+    if (b.y + LETTER_H > H) {
+      b.y = H - LETTER_H;
+      b.vy = -Math.abs(b.vy) * BOUNCE;
+      b.vrot += b.vx * 0.35;
+    }
+
+    b.el.style.transform =
+      `translate(${b.x | 0}px, ${b.y | 0}px) rotate(${b.rot.toFixed(1)}deg)`;
+  });
+
+  requestAnimationFrame(loop);
+}
+
+function onOrientation(e) {
+  if (e.gamma === null) return;
+  gyroActive = true;
+  document.getElementById('hint').style.opacity = '0';
+  gx = (e.gamma / 90) * 8;
+  gy = (e.beta  / 90) * 8;
+  if (Math.abs(e.beta) > 160) gy = -gy;
+}
+
+function setupGyro() {
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    const btn = document.getElementById('permission-btn');
+    btn.style.display = 'block';
+    btn.addEventListener('click', () => {
+      DeviceOrientationEvent.requestPermission().then(result => {
+        if (result === 'granted') {
+          window.addEventListener('deviceorientation', onOrientation, { passive: true });
+          btn.style.display = 'none';
+        }
+      }).catch(() => {});
+    });
+  } else {
+    window.addEventListener('deviceorientation', onOrientation, { passive: true });
+    window.addEventListener('devicemotion', e => {
+      const a = e.accelerationIncludingGravity;
+      if (!a || gyroActive) return;
+      gx = -(a.x || 0) * 0.45;
+      gy =  (a.y || 0) * 0.45;
+    }, { passive: true });
+  }
+}
+
+document.body.addEventListener('click',      shake);
+document.body.addEventListener('touchstart', e => { e.preventDefault(); shake(); }, { passive: false });
+
+setupGyro();
+loop();
+</script>
+</body>
+</html>
